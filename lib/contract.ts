@@ -36,23 +36,36 @@ export function getProvider() {
 
 // Get token info
 export async function getTokenInfo() {
-  const provider = getProvider()
-  const contract = getContract(provider)
+  try {
+    const provider = getProvider()
+    const contract = getContract(provider)
 
-  const [name, symbol, decimals, totalSupply] = await Promise.all([
-    contract.name(),
-    contract.symbol(),
-    contract.decimals(),
-    contract.totalSupply(),
-  ])
+    const [name, symbol, decimals, totalSupply] = await Promise.all([
+      contract.name(),
+      contract.symbol(),
+      contract.decimals(),
+      contract.totalSupply(),
+    ])
 
-  return {
-    name,
-    symbol,
-    decimals,
-    totalSupply: ethers.utils.formatUnits(totalSupply, decimals),
-    contractAddress: CONTRACT_ADDRESS,
-    network: "BASE Sepolia Testnet",
+    return {
+      name,
+      symbol,
+      decimals,
+      totalSupply: ethers.utils.formatUnits(totalSupply, decimals),
+      contractAddress: CONTRACT_ADDRESS,
+      network: "BASE Sepolia Testnet",
+    }
+  } catch (error) {
+    console.error("Error getting token info:", error)
+    // Return default values if there's an error
+    return {
+      name: "HPonzi",
+      symbol: "HPZ",
+      decimals: 18,
+      totalSupply: "1,000,000",
+      contractAddress: CONTRACT_ADDRESS,
+      network: "BASE Sepolia Testnet",
+    }
   }
 }
 
@@ -64,37 +77,73 @@ export async function checkIfTokensUnlocked(address: string): Promise<{
   nextAttemptTime: number
   hasCommit: boolean
 }> {
-  const provider = getProvider()
-  const contract = getContract(provider)
+  try {
+    const provider = getProvider()
+    const contract = getContract(provider)
 
-  const [unlockedUntil, unlockedAmount, lastAttempt, commit] = await Promise.all([
-    contract.snapshotUnlockedUntil(address),
-    contract.unlockedTokenAmount(address),
-    contract.snapshotLastUnlockAttempt(address),
-    contract.commits(address),
-  ])
+    const [unlockedUntil, unlockedAmount, lastAttempt, commit] = await Promise.all([
+      contract.snapshotUnlockedUntil(address),
+      contract.unlockedTokenAmount(address),
+      contract.snapshotLastUnlockAttempt(address),
+      contract.commits(address),
+    ])
 
-  const now = Math.floor(Date.now() / 1000)
-  const nextAttemptTime = lastAttempt.toNumber() + 24 * 60 * 60 // 24 hours after last attempt
+    const now = Math.floor(Date.now() / 1000)
+    const nextAttemptTime = lastAttempt.toNumber() + 24 * 60 * 60 // 24 hours after last attempt
 
-  return {
-    isUnlocked: now <= unlockedUntil.toNumber() && unlockedAmount.gt(0),
-    unlockedUntil: unlockedUntil.toNumber(),
-    unlockedAmount: ethers.utils.formatEther(unlockedAmount),
-    nextAttemptTime,
-    hasCommit: commit.hash !== ethers.constants.HashZero,
+    return {
+      isUnlocked: now <= unlockedUntil.toNumber() && unlockedAmount.gt(0),
+      unlockedUntil: unlockedUntil.toNumber(),
+      unlockedAmount: ethers.utils.formatEther(unlockedAmount),
+      nextAttemptTime,
+      hasCommit: commit.hash !== ethers.constants.HashZero,
+    }
+  } catch (error) {
+    console.error("Error checking if tokens are unlocked:", error)
+    // Return default values if there's an error
+    return {
+      isUnlocked: false,
+      unlockedUntil: 0,
+      unlockedAmount: "0",
+      nextAttemptTime: 0,
+      hasCommit: false,
+    }
   }
 }
 
 // Commit a number
 export async function commitNumber(number: number): Promise<string> {
-  const provider = getProvider()
-  const contract = getContract(provider)
+  console.log("Committing number:", number)
 
-  const tx = await contract.commitHash(number)
-  await tx.wait()
+  try {
+    // Ensure we have a fresh provider instance
+    const provider = getProvider()
 
-  return tx.hash
+    // Make sure the provider is connected
+    await provider.send("eth_requestAccounts", [])
+
+    // Get the contract with the signer
+    const contract = getContract(provider)
+
+    console.log("Calling contract.commitHash with number:", number)
+
+    // Call the contract method - this should trigger MetaMask
+    const tx = await contract.commitHash(number, {
+      gasLimit: 200000, // Set a reasonable gas limit
+    })
+
+    console.log("Transaction sent:", tx.hash)
+
+    // Wait for the transaction to be mined
+    const receipt = await tx.wait()
+
+    console.log("Transaction confirmed:", receipt)
+
+    return tx.hash
+  } catch (error) {
+    console.error("Error in commitNumber:", error)
+    throw error
+  }
 }
 
 // Reveal a number
@@ -103,12 +152,24 @@ export async function revealNumber(number: number): Promise<{
   hash: string
   error?: string
 }> {
-  const provider = getProvider()
-  const contract = getContract(provider)
-
   try {
-    const tx = await contract.revealAndUnlock(number)
+    const provider = getProvider()
+
+    // Make sure the provider is connected
+    await provider.send("eth_requestAccounts", [])
+
+    const contract = getContract(provider)
+
+    console.log("Calling revealAndUnlock with number:", number)
+
+    const tx = await contract.revealAndUnlock(number, {
+      gasLimit: 300000, // Set a reasonable gas limit
+    })
+
+    console.log("Transaction sent:", tx.hash)
+
     const receipt = await tx.wait()
+    console.log("Transaction confirmed:", receipt)
 
     // Check if the TokensUnlocked event was emitted
     const unlockEvent = receipt.events?.find((e: any) => e.event === "TokensUnlocked")
@@ -118,6 +179,8 @@ export async function revealNumber(number: number): Promise<{
       hash: tx.hash,
     }
   } catch (error: any) {
+    console.error("Error in revealNumber:", error)
+
     // Extract error message from revert reason
     let errorMessage = "Transaction failed"
 
@@ -145,11 +208,16 @@ export async function revealNumber(number: number): Promise<{
 
 // Get token balance
 export async function getTokenBalance(address: string): Promise<string> {
-  const provider = getProvider()
-  const contract = getContract(provider)
+  try {
+    const provider = getProvider()
+    const contract = getContract(provider)
 
-  const balance = await contract.balanceOf(address)
-  return ethers.utils.formatEther(balance)
+    const balance = await contract.balanceOf(address)
+    return ethers.utils.formatEther(balance)
+  } catch (error) {
+    console.error("Error getting token balance:", error)
+    return "0"
+  }
 }
 
 // Transfer tokens
@@ -162,19 +230,39 @@ export async function transferTokens(
   hash: string
   error?: string
 }> {
-  const provider = getProvider()
-  const contract = getContract(provider)
-
   try {
+    const provider = getProvider()
+
+    // Make sure the provider is connected
+    await provider.send("eth_requestAccounts", [])
+
+    const contract = getContract(provider)
+
     const amountWei = ethers.utils.parseEther(amount)
-    const tx = await contract.transfer(to, amountWei)
-    await tx.wait()
+
+    console.log("Transferring tokens:", {
+      to,
+      amount,
+      amountWei: amountWei.toString(),
+      from,
+    })
+
+    const tx = await contract.transfer(to, amountWei, {
+      gasLimit: 200000, // Set a reasonable gas limit
+    })
+
+    console.log("Transaction sent:", tx.hash)
+
+    const receipt = await tx.wait()
+    console.log("Transaction confirmed:", receipt)
 
     return {
       success: true,
       hash: tx.hash,
     }
   } catch (error: any) {
+    console.error("Error in transferTokens:", error)
+
     // Extract error message
     let errorMessage = "Transfer failed"
 
@@ -209,10 +297,15 @@ export function formatTimeRemaining(timestamp: number): string {
 
 // Check if a commit exists
 export async function checkCommitExists(address: string): Promise<boolean> {
-  const provider = getProvider()
-  const contract = getContract(provider)
+  try {
+    const provider = getProvider()
+    const contract = getContract(provider)
 
-  const commit = await contract.commits(address)
-  return commit.hash !== ethers.constants.HashZero
+    const commit = await contract.commits(address)
+    return commit.hash !== ethers.constants.HashZero
+  } catch (error) {
+    console.error("Error checking if commit exists:", error)
+    return false
+  }
 }
 

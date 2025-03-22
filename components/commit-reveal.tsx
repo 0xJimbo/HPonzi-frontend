@@ -94,7 +94,15 @@ export default function CommitReveal({
           description: "Your number has been committed to the blockchain (simulated)",
         })
       } else {
-        await commitNumber(Number.parseInt(number))
+        // Show a toast to let the user know they need to confirm in MetaMask
+        toast({
+          title: "Confirm Transaction",
+          description: "Please confirm the transaction in your wallet",
+        })
+
+        console.log("Calling commitNumber with:", Number.parseInt(number))
+        const txHash = await commitNumber(Number.parseInt(number))
+        console.log("Transaction hash:", txHash)
 
         toast({
           title: "Commit Successful",
@@ -104,9 +112,10 @@ export default function CommitReveal({
 
       refreshStatus()
     } catch (error: any) {
+      console.error("Commit error:", error)
       toast({
         title: "Commit Failed",
-        description: error.message || "Failed to commit number",
+        description: error.message || "Failed to commit number. Check console for details.",
         variant: "destructive",
       })
     } finally {
@@ -161,6 +170,12 @@ export default function CommitReveal({
           }
         }
       } else {
+        // Show a toast to let the user know they need to confirm in MetaMask
+        toast({
+          title: "Confirm Transaction",
+          description: "Please confirm the transaction in your wallet",
+        })
+
         const result = await revealNumber(Number.parseInt(number))
 
         if (result.success) {
@@ -184,9 +199,10 @@ export default function CommitReveal({
 
       refreshStatus()
     } catch (error: any) {
+      console.error("Reveal error:", error)
       toast({
         title: "Reveal Failed",
-        description: error.message || "Failed to reveal number",
+        description: error.message || "Failed to reveal number. Check console for details.",
         variant: "destructive",
       })
     } finally {
