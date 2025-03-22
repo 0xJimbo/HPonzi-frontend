@@ -112,20 +112,41 @@ export default function TokenDashboard() {
         return
       }
 
+      // Show connecting toast
+      toast({
+        title: "Connecting...",
+        description: "Please approve the connection request in MetaMask",
+      })
+
       const account = await connectWallet()
+
+      if (!account) {
+        throw new Error("Failed to get account from MetaMask")
+      }
+
       setAccount(account)
 
       // Get token info
-      const info = await getTokenInfo()
-      setTokenData(info)
+      try {
+        const info = await getTokenInfo()
+        setTokenData(info)
+      } catch (error) {
+        console.error("Failed to get token info:", error)
+        // Continue anyway, using default values
+      }
 
-      // Check if tokens are unlocked for this account
-      const status = await checkIfTokensUnlocked(account)
-      setUnlockStatus(status)
+      try {
+        // Check if tokens are unlocked for this account
+        const status = await checkIfTokensUnlocked(account)
+        setUnlockStatus(status)
 
-      // Get token balance
-      const balance = await getTokenBalance(account)
-      setBalance(balance)
+        // Get token balance
+        const balance = await getTokenBalance(account)
+        setBalance(balance)
+      } catch (error) {
+        console.error("Failed to get token status:", error)
+        // Continue anyway with default values
+      }
 
       setConnected(true)
 
